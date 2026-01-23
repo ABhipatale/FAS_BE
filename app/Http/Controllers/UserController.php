@@ -12,72 +12,6 @@ use Illuminate\Support\Facades\Hash;
 class UserController extends Controller
 {
     /**
-     * Store a newly created user
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
-    public function store(Request $request)
-    {
-        try {
-            // Validate the request data
-            $validator = Validator::make($request->all(), [
-                'name' => 'required|string|max:255',
-                'email' => 'required|email|unique:users,email|max:255',
-                'address' => 'nullable|string|max:255',
-                'phone' => 'nullable|string|max:20',
-                'sex' => 'nullable|string|in:Male,Female,Other',
-                'age' => 'nullable|integer|min:18|max:100',
-                'dob' => 'nullable|date',
-                'position' => 'nullable|string|max:100',
-                'shift_id' => 'nullable|exists:shifts,id',
-                'password' => 'required|string|min:6',
-                'role' => ['nullable', Rule::in(['admin', 'user', 'superadmin', 'employee'])],
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            // Create the user
-            $user = User::create([
-                'name' => $request->name,
-                'email' => $request->email,
-                'address' => $request->address,
-                'phone' => $request->phone,
-                'sex' => $request->sex,
-                'age' => $request->age,
-                'dob' => $request->dob,
-                'position' => $request->position,
-                'shift_id' => $request->shift_id,
-                'role' => $request->role ?? 'employee',
-                'password' => $request->password, // This will be hashed by the User model
-                'face_descriptor' => null, // Will be set during face registration
-            ]);
-
-            // Load the shift relationship
-            $user->load('shift');
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Employee created successfully',
-                'data' => $user
-            ], 201);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create employee',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
      * Register a new user
      *
      * @param  \Illuminate\Http\Request  $request
@@ -133,6 +67,72 @@ class UserController extends Controller
     }
 
     /**
+     * Store a newly created user in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(Request $request)
+    {
+        try {
+            // Validate the request data
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|unique:users,email|max:255',
+                'address' => 'nullable|string|max:255',
+                'phone' => 'nullable|string|max:20',
+                'sex' => 'nullable|string|in:Male,Female,Other',
+                'age' => 'nullable|integer|min:18|max:100',
+                'dob' => 'nullable|date',
+                'position' => 'nullable|string|max:100',
+                'shift_id' => 'nullable|exists:shifts,id',
+                'password' => 'required|string|min:6',
+                'role' => ['nullable', Rule::in(['admin', 'user', 'superadmin', 'employee'])],
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Create the user
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'address' => $request->address,
+                'phone' => $request->phone,
+                'sex' => $request->sex,
+                'age' => $request->age,
+                'dob' => $request->dob,
+                'position' => $request->position,
+                'shift_id' => $request->shift_id,
+                'role' => $request->role ?? 'employee', // Default to employee role
+                'password' => $request->password, // This will be hashed by the User model
+                'face_descriptor' => null, // Will be set during face registration
+            ]);
+
+            // Load the shift relationship
+            $user->load('shift');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Employee created successfully',
+                'data' => $user
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create employee',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Get all users
      *
      * @return \Illuminate\Http\Response
@@ -149,16 +149,24 @@ class UserController extends Controller
                 ], 403);
             }
             
-            $users = User::select('id', 'name', 'email', 'role', 'created_at')->get();
+            // Check database connectivity
+            \DB::connection()->getPdo();
+            
+            $users = User::with('shift')->get();
             
             return response()->json([
                 'success' => true,
                 'data' => $users
             ]);
+        } catch (\PDOException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Database error: ' . $e->getMessage()
+            ], 500);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch users',
+                'message' => 'Failed to fetch users: ' . $e->getMessage(),
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -173,7 +181,7 @@ class UserController extends Controller
     public function show($id)
     {
         try {
-            $user = User::find($id);
+            $user = User::with('shift')->find($id);
             
             if (!$user) {
                 return response()->json([
