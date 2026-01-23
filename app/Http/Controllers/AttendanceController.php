@@ -245,58 +245,78 @@ class AttendanceController extends Controller
             $month = $request->query('month', date('n')); // Current month
             $year = $request->query('year', date('Y')); // Current year
             
-            // In a real implementation, you would have an Attendance model to track attendance records
-            // For now, we'll return a placeholder response with mock data
+            // Get real attendance data from the database for the specified user and month
+            $monthlyAttendance = Attendance::where('user_id', $userId)
+                ->whereYear('date', $year)
+                ->whereMonth('date', $month)
+                ->orderBy('date')
+                ->get()
+                ->map(function ($attendance) {
+                    $hoursWorked = null;
+                    if ($attendance->punch_in_time && $attendance->punch_out_time) {
+                        $inTime = $attendance->punch_in_time;
+                        $outTime = $attendance->punch_out_time;
+                        $interval = $inTime->diff($outTime);
+                        $hoursWorked = $interval->h + ($interval->i / 60);
+                        $hoursWorked = number_format($hoursWorked, 2);
+                    }
+                    return [
+                        'date' => $attendance->date->format('Y-m-d'),
+                        'status' => $attendance->status,
+                        'punch_in_time' => $attendance->punch_in_time ? $attendance->punch_in_time->format('H:i:s') : null,
+                        'punch_out_time' => $attendance->punch_out_time ? $attendance->punch_out_time->format('H:i:s') : null,
+                        'hours_worked' => $hoursWorked,
+                    ];
+                })
+                ->toArray();
             
-            // Generate mock attendance data for the specified month
-            $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $year);
-            $monthlyAttendance = [];
+            // Generate weekly attendance data (last 7 days including today)
+            $weeklyAttendance = Attendance::where('user_id', $userId)
+                ->whereBetween('date', [Carbon::now()->subDays(6), Carbon::now()])
+                ->orderBy('date')
+                ->get()
+                ->map(function ($attendance) {
+                    $hoursWorked = null;
+                    if ($attendance->punch_in_time && $attendance->punch_out_time) {
+                        $inTime = $attendance->punch_in_time;
+                        $outTime = $attendance->punch_out_time;
+                        $interval = $inTime->diff($outTime);
+                        $hoursWorked = $interval->h + ($interval->i / 60);
+                        $hoursWorked = number_format($hoursWorked, 2);
+                    }
+                    return [
+                        'date' => $attendance->date->format('Y-m-d'),
+                        'status' => $attendance->status,
+                        'punch_in_time' => $attendance->punch_in_time ? $attendance->punch_in_time->format('H:i:s') : null,
+                        'punch_out_time' => $attendance->punch_out_time ? $attendance->punch_out_time->format('H:i:s') : null,
+                        'hours_worked' => $hoursWorked,
+                    ];
+                })
+                ->toArray();
             
-            for ($day = 1; $day <= $daysInMonth; $day++) {
-                $date = sprintf('%04d-%02d-%02d', $year, $month, $day);
-                $dateObj = new \DateTime($date);
-                
-                // Skip weekends (Saturday and Sunday)
-                $dayOfWeek = $dateObj->format('w');
-                if ($dayOfWeek == 0 || $dayOfWeek == 6) {
-                    continue;
-                }
-                
-                // Randomly assign attendance status for demo purposes
-                $statuses = ['present', 'absent', 'late', 'leave'];
-                $randomStatus = $statuses[array_rand($statuses)];
-                
-                $attendanceRecord = [
-                    'date' => $date,
-                    'status' => $randomStatus,
-                    'punch_in_time' => null,
-                    'punch_out_time' => null,
-                    'hours_worked' => null,
-                ];
-                
-                // If present or late, add punch times
-                if ($randomStatus === 'present' || $randomStatus === 'late') {
-                    $punchInHour = rand(7, 10); // Between 7-10 AM
-                    $punchInMinute = rand(0, 59);
-                    $attendanceRecord['punch_in_time'] = sprintf('%02d:%02d', $punchInHour, $punchInMinute);
-                    
-                    $punchOutHour = rand(16, 18); // Between 4-6 PM
-                    $punchOutMinute = rand(0, 59);
-                    $attendanceRecord['punch_out_time'] = sprintf('%02d:%02d', $punchOutHour, $punchOutMinute);
-                    
-                    // Calculate hours worked
-                    $inTime = new \DateTime($attendanceRecord['punch_in_time']);
-                    $outTime = new \DateTime($attendanceRecord['punch_out_time']);
-                    $interval = $inTime->diff($outTime);
-                    $attendanceRecord['hours_worked'] = $interval->format('%h.%i');
-                }
-                
-                $monthlyAttendance[] = $attendanceRecord;
-            }
-            
-            // Generate mock weekly and yearly data
-            $weeklyAttendance = [];
-            $yearlyAttendance = [];
+            // Generate yearly attendance data (current year)
+            $yearlyAttendance = Attendance::where('user_id', $userId)
+                ->whereYear('date', $year)
+                ->orderBy('date')
+                ->get()
+                ->map(function ($attendance) {
+                    $hoursWorked = null;
+                    if ($attendance->punch_in_time && $attendance->punch_out_time) {
+                        $inTime = $attendance->punch_in_time;
+                        $outTime = $attendance->punch_out_time;
+                        $interval = $inTime->diff($outTime);
+                        $hoursWorked = $interval->h + ($interval->i / 60);
+                        $hoursWorked = number_format($hoursWorked, 2);
+                    }
+                    return [
+                        'date' => $attendance->date->format('Y-m-d'),
+                        'status' => $attendance->status,
+                        'punch_in_time' => $attendance->punch_in_time ? $attendance->punch_in_time->format('H:i:s') : null,
+                        'punch_out_time' => $attendance->punch_out_time ? $attendance->punch_out_time->format('H:i:s') : null,
+                        'hours_worked' => $hoursWorked,
+                    ];
+                })
+                ->toArray();
             
             return response()->json([
                 'success' => true,
