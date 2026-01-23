@@ -21,6 +21,13 @@ class User extends Authenticatable
         'password',
         'role',
         'face_descriptor',
+        'address',
+        'phone',
+        'sex',
+        'age',
+        'dob',
+        'position',
+        'shift_id',
     ];
 
     /**
@@ -54,7 +61,7 @@ class User extends Authenticatable
      */
     public function isAdmin(): bool
     {
-        return $this->role === 'admin'|| $this->role === '0';
+        return $this->role === 'admin' || $this->role === '0';
     }
 
     public function isUser(): bool
@@ -64,7 +71,7 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        return $this->role === 'superadmin'|| $this->role === '2';
+        return $this->role === 'superadmin' || $this->role === '2';
     }
     
     public function isEmployee(): bool
