@@ -11,10 +11,22 @@ class ShiftController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         try {
-            $shifts = Shift::all();
+            $user = $request->user();
+            
+            // If super admin, can optionally see all shifts or filter by company_id
+            if ($user->isSuperAdmin() && $request->has('company_id')) {
+                $shifts = Shift::where('company_id', $request->company_id)->get();
+            } elseif (!$user->isSuperAdmin()) {
+                // Regular admins can only see shifts from their company
+                $shifts = Shift::where('company_id', $user->company_id)->get();
+            } else {
+                // Super admin without company_id filter - show all shifts
+                $shifts = Shift::all();
+            }
+            
             return response()->json([
                 'success' => true,
                 'data' => $shifts
@@ -40,12 +52,25 @@ class ShiftController extends Controller
                 'status' => 'required|in:active,inactive'
             ]);
 
+            // Determine company_id
+            $company_id = $request->company_id ?? $request->user()->company_id;
+            
+            // Validate that the user has access to this company
+            if (!$request->user()->isSuperAdmin() && $company_id != $request->user()->company_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized to create shift for this company'
+                ], 403);
+            }
+            
             $shift = Shift::create([
                 'shift_name' => $request->shift_name,
                 'punch_in_time' => $request->punch_in_time,
                 'punch_out_time' => $request->punch_out_time,
-                'status' => $request->status
+                'status' => $request->status,
+                'company_id' => $company_id
             ]);
+
 
             return response()->json([
                 'success' => true,
@@ -69,10 +94,21 @@ class ShiftController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show($id)
+    public function show(Request $request, $id)
     {
         try {
+            $user = $request->user();
+            
             $shift = Shift::findOrFail($id);
+            
+            // Check if user has permission to view this shift
+            if (!$user->isSuperAdmin() && $shift->company_id != $user->company_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized to view this shift'
+                ], 403);
+            }
+            
             return response()->json([
                 'success' => true,
                 'data' => $shift
@@ -99,13 +135,29 @@ class ShiftController extends Controller
             ]);
 
             $shift = Shift::findOrFail($id);
-
-            $shift->update([
+            
+            // Check if user has permission to update this shift
+            $user = $request->user();
+            if (!$user->isSuperAdmin() && $shift->company_id != $user->company_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized to update this shift'
+                ], 403);
+            }
+            
+            // Handle company_id update (only super admin can change company)
+            $updateData = [
                 'shift_name' => $request->shift_name ?? $shift->shift_name,
                 'punch_in_time' => $request->punch_in_time ?? $shift->punch_in_time,
                 'punch_out_time' => $request->punch_out_time ?? $shift->punch_out_time,
                 'status' => $request->status ?? $shift->status
-            ]);
+            ];
+            
+            if ($user->isSuperAdmin() && $request->has('company_id')) {
+                $updateData['company_id'] = $request->company_id;
+            }
+
+            $shift->update($updateData);
 
             return response()->json([
                 'success' => true,
@@ -133,6 +185,15 @@ class ShiftController extends Controller
     {
         try {
             $shift = Shift::findOrFail($id);
+            
+            // Check if user has permission to delete this shift
+            $user = request()->user();
+            if (!$user->isSuperAdmin() && $shift->company_id != $user->company_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized to delete this shift'
+                ], 403);
+            }
 
             // Check if any users are assigned to this shift
             if ($shift->users()->count() > 0) {
