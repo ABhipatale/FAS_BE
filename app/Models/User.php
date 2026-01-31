@@ -28,6 +28,7 @@ class User extends Authenticatable
         'dob',
         'position',
         'shift_id',
+        'company_id',
     ];
 
     /**
@@ -89,5 +90,11 @@ class User extends Authenticatable
     public function shift()
     {
         return $this->belongsTo(Shift::class);
+    }
+    
+    // Relationship with Company
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
     }
 }

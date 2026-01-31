@@ -13,7 +13,8 @@ class Shift extends Model
         'shift_name',
         'punch_in_time',
         'punch_out_time',
-        'status'
+        'status',
+        'company_id'
     ];
 
     protected $casts = [
@@ -23,5 +24,11 @@ class Shift extends Model
     public function users()
     {
         return $this->hasMany(User::class);
+    }
+    
+    // Relationship with Company
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
     }
 }

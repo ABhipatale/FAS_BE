@@ -79,6 +79,15 @@ class AttendanceController extends Controller
             }
             
             if ($matchedUser) {
+                // Check if the matched user belongs to the same company as the authenticating user (for security)
+                $authUser = $request->user();
+                if ($authUser && $matchedUser->company_id !== $authUser->company_id) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Unauthorized: User does not belong to your company',
+                    ], 403);
+                }
+                
                 // Check if attendance for today already exists
                 $today = Carbon::today();
                 $existingAttendance = Attendance::where('user_id', $matchedUser->id)
@@ -121,7 +130,8 @@ class AttendanceController extends Controller
                         'user_id' => $matchedUser->id,
                         'date' => $today,
                         'punch_in_time' => $punchInTime,
-                        'status' => 'present'
+                        'status' => 'present',
+                        'company_id' => $matchedUser->company_id // Assign the same company as the user
                     ]);
 
                     return response()->json([
@@ -231,13 +241,15 @@ class AttendanceController extends Controller
                 ], 403);
             }
             
-            // Find the user whose attendance is being requested
-            $user = User::find($userId);
+            // Find the user whose attendance is being requested within the same company
+            $user = User::where('id', $userId)
+                        ->where('company_id', $authUser->company_id)
+                        ->first();
             
             if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not found',
+                    'message' => 'User not found or unauthorized access',
                 ], 404);
             }
             
@@ -349,8 +361,8 @@ class AttendanceController extends Controller
         try {
             $authUser = Auth::user();
             
-            // Get total employees
-            $totalEmployees = User::count();
+            // Get total employees for the current company
+            $totalEmployees = User::where('company_id', $authUser->company_id)->count();
             
             // Check if attendances table exists
             $attendanceTableExists = \Schema::hasTable('attendances');
@@ -358,7 +370,8 @@ class AttendanceController extends Controller
             if ($attendanceTableExists) {
                 // Get today's attendance stats
                 $today = Carbon::today();
-                $todayPresentCount = Attendance::whereDate('date', $today)
+                $todayPresentCount = Attendance::where('company_id', $authUser->company_id)
+                    ->whereDate('date', $today)
                     ->where('status', 'present')
                     ->count();
                 
@@ -375,7 +388,8 @@ class AttendanceController extends Controller
                     $dateStr = $currentDate->format('Y-m-d');
                     $dayName = $currentDate->format('D');
                     
-                    $presentCount = Attendance::whereDate('date', $dateStr)
+                    $presentCount = Attendance::where('company_id', $authUser->company_id)
+                        ->whereDate('date', $dateStr)
                         ->where('status', 'present')
                         ->count();
                     
@@ -392,7 +406,8 @@ class AttendanceController extends Controller
                 }
                 
                 // Get today's attendance list
-                $todayAttendanceList = Attendance::whereDate('date', $today)
+                $todayAttendanceList = Attendance::where('company_id', $authUser->company_id)
+                    ->whereDate('date', $today)
                     ->with('user')
                     ->get()
                     ->map(function ($attendance) {
@@ -483,6 +498,9 @@ class AttendanceController extends Controller
             } elseif ($filter === 'custom' && $startDate && $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
             }
+            
+            // Apply company filter to the query
+            $query->where('company_id', $authUser->company_id);
             
             // Get raw attendance records
             $attendanceRecords = $query->get();

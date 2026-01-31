@@ -14,7 +14,8 @@ class Attendance extends Model
         'date',
         'punch_in_time',
         'punch_out_time',
-        'status'
+        'status',
+        'company_id'
     ];
 
     protected $casts = [
@@ -26,5 +27,11 @@ class Attendance extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+    
+    // Relationship with Company
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
     }
 }

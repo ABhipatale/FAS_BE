@@ -13,6 +13,7 @@ class FaceDescriptor extends Model
         'user_id',
         'face_descriptor',
         'last_used_at',
+        'company_id',
     ];
     
     protected $casts = [
@@ -24,5 +25,11 @@ class FaceDescriptor extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+    
+    // Relationship with Company
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
     }
 }

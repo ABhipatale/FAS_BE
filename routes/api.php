@@ -6,6 +6,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\FaceDescriptorController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\ShiftController;
+use App\Http\Controllers\CompanyController;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,7 +25,10 @@ Route::middleware('api')->group(function () {
     Route::post('/register', [UserController::class, 'register']);
     
     // User login endpoint
-    Route::post('/login', [UserController::class, 'login']);
+    Route::post('/login', [UserController::class, 'login'])->name('login');
+    
+    // Company registration endpoint
+    Route::post('/companies/register', [CompanyController::class, 'register']);
     
     // Test endpoint
     Route::get('/test', function () {
@@ -62,4 +66,10 @@ Route::middleware(['api', 'auth:sanctum'])->group(function () {
     
     // Shift routes
     Route::resource('/shifts', ShiftController::class)->except(['create', 'edit']);
+    
+    // Company routes (protected)
+    Route::get('/company/details', [CompanyController::class, 'getCompanyDetails']);
+    Route::put('/company/update', [CompanyController::class, 'updateCompany']);
+    Route::get('/companies', [CompanyController::class, 'index']); // Superadmin only
+    Route::get('/companies/{id}', [CompanyController::class, 'show']); // Superadmin only
 });

@@ -36,6 +36,10 @@ class UserController extends Controller
                 ], 422);
             }
 
+            // Get the authenticated user to get their company_id (if registering from within company)
+            $authUser = $request->user();
+            $companyId = $authUser ? $authUser->company_id : null;
+            
             // Create the user
             $user = User::create([
                 'name' => $request->name,
@@ -43,6 +47,7 @@ class UserController extends Controller
                 'role' => $request->role,
                 'password' => $request->password, // This will be hashed by the User model
                 'face_descriptor' => null, // Will be set during face registration
+                'company_id' => $companyId, // Assign company if registering from within company
             ]);
 
             return response()->json([
@@ -98,6 +103,9 @@ class UserController extends Controller
                 ], 422);
             }
 
+            // Get the authenticated user to get their company_id
+            $authUser = $request->user();
+            
             // Create the user
             $user = User::create([
                 'name' => $request->name,
@@ -112,6 +120,7 @@ class UserController extends Controller
                 'role' => $request->role ?? 'employee', // Default to employee role
                 'password' => $request->password, // This will be hashed by the User model
                 'face_descriptor' => null, // Will be set during face registration
+                'company_id' => $authUser->company_id, // Assign the same company as the creator
             ]);
 
             // Load the shift relationship
@@ -152,7 +161,10 @@ class UserController extends Controller
             // Check database connectivity
             \DB::connection()->getPdo();
             
-            $users = User::with('shift')->get();
+            // Filter users by company
+            $users = User::where('company_id', $user->company_id)
+                        ->with('shift')
+                        ->get();
             
             return response()->json([
                 'success' => true,
@@ -181,12 +193,18 @@ class UserController extends Controller
     public function show($id)
     {
         try {
-            $user = User::with('shift')->find($id);
+            $authUser = request()->user();
+            
+            // Find user within the same company
+            $user = User::where('id', $id)
+                       ->where('company_id', $authUser->company_id)
+                       ->with('shift')
+                       ->first();
             
             if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not found'
+                    'message' => 'User not found or unauthorized access'
                 ], 404);
             }
 
