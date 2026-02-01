@@ -20,7 +20,7 @@ return [
 
    
 
-    'timezone' => 'UTC',
+    'timezone' => 'Asia/Kolkata',
 
     
     'locale' => env('APP_LOCALE', 'en'),
