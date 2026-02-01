@@ -15,6 +15,7 @@ class Attendance extends Model
         'punch_in_time',
         'punch_out_time',
         'status',
+        'late_mark',
         'company_id'
     ];
 
@@ -22,6 +23,7 @@ class Attendance extends Model
         'date' => 'date',
         'punch_in_time' => 'datetime',
         'punch_out_time' => 'datetime',
+        'late_mark' => 'boolean',
     ];
 
     public function user()

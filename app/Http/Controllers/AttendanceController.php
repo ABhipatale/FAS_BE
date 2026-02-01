@@ -126,17 +126,56 @@ class AttendanceController extends Controller
                 } else {
                     // Create new attendance record with punch-in time
                     $punchInTime = Carbon::now();
+                    
+                    // Check if user has a shift assigned
+                    if (!$matchedUser->shift || !$matchedUser->shift->punch_in_time) {
+                        // No shift assigned or no shift start time, mark as present without late check
+                        $attendance = Attendance::create([
+                            'user_id' => $matchedUser->id,
+                            'date' => $today,
+                            'punch_in_time' => $punchInTime,
+                            'status' => 'present',
+                            'late_mark' => false,
+                            'company_id' => $matchedUser->company_id
+                        ]);
+                        
+                        return response()->json([
+                            'success' => true,
+                            'message' => 'Attendance marked successfully',
+                            'data' => [
+                                'user' => [
+                                    'id' => $matchedUser->id,
+                                    'name' => $matchedUser->name,
+                                    'email' => $matchedUser->email,
+                                ],
+                                'action' => 'punch_in',
+                                'punch_in_time' => $punchInTime->format('Y-m-d H:i:s'),
+                                'confidence' => round((1 - $minDistance) * 100, 2),
+                                'distance' => round($minDistance, 4),
+                                'late_mark' => false
+                            ]
+                        ]);
+                    }
+                    
+                    // Calculate shift start time for today
+                    $shiftStartTime = Carbon::createFromFormat('H:i:s', $matchedUser->shift->punch_in_time);
+                    $shiftStartToday = Carbon::today()->setTimeFromTimeString($matchedUser->shift->punch_in_time);
+                    
+                    // Check if punch-in is more than 30 minutes late
+                    $isLate = $punchInTime->gt($shiftStartToday->copy()->addMinutes(30));
+                    
                     $attendance = Attendance::create([
                         'user_id' => $matchedUser->id,
                         'date' => $today,
                         'punch_in_time' => $punchInTime,
-                        'status' => 'present',
-                        'company_id' => $matchedUser->company_id // Assign the same company as the user
+                        'status' => $isLate ? 'late' : 'present',
+                        'late_mark' => $isLate,
+                        'company_id' => $matchedUser->company_id
                     ]);
 
                     return response()->json([
                         'success' => true,
-                        'message' => 'Attendance marked successfully',
+                        'message' => $isLate ? 'Attendance marked as late' : 'Attendance marked successfully',
                         'data' => [
                             'user' => [
                                 'id' => $matchedUser->id,
@@ -147,6 +186,9 @@ class AttendanceController extends Controller
                             'punch_in_time' => $punchInTime->format('Y-m-d H:i:s'),
                             'confidence' => round((1 - $minDistance) * 100, 2),
                             'distance' => round($minDistance, 4),
+                            'late_mark' => $isLate,
+                            'shift_start_time' => $shiftStartToday->format('Y-m-d H:i:s'),
+                            'minutes_late' => $isLate ? $punchInTime->diffInMinutes($shiftStartToday) : 0
                         ]
                     ]);
                 }
