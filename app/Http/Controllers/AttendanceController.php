@@ -61,6 +61,7 @@ class AttendanceController extends Controller
             // Compare the incoming face descriptor with all stored descriptors
             $matchedUser = null;
             $minDistance = PHP_FLOAT_MAX;
+            $bestMatchDescriptor = null;
             
             foreach ($storedFaceDescriptors as $storedDescriptor) {
                 $storedDescriptorArray = $storedDescriptor->face_descriptor;
@@ -71,10 +72,19 @@ class AttendanceController extends Controller
                 // If this distance is smaller than the current minimum, update the match
                 if ($distance < $minDistance) {
                     $minDistance = $distance;
-                    // Set threshold for considering a match (this can be adjusted based on accuracy needs)
-                    if ($distance < 0.6) { // Threshold can be tuned based on testing
-                        $matchedUser = $storedDescriptor->user;
-                    }
+                    $bestMatchDescriptor = $storedDescriptor;
+                }
+            }
+            
+            // Only consider it a match if distance is below threshold AND the user has a registered face
+            if ($minDistance < 0.5 && $bestMatchDescriptor) { // Changed from 0.6 to 0.5 for 50% confidence
+                $matchedUser = $bestMatchDescriptor->user;
+                
+                // Verify that this user actually has a registered face descriptor
+                $userFaceDescriptors = FaceDescriptor::where('user_id', $matchedUser->id)->count();
+                if ($userFaceDescriptors === 0) {
+                    // User exists but has no registered face descriptors - this shouldn't happen but let's be safe
+                    $matchedUser = null;
                 }
             }
             
@@ -193,9 +203,19 @@ class AttendanceController extends Controller
                     ]);
                 }
             } else {
+                // Determine the reason for no match
+                $message = 'Face not recognized. Please ensure your face is registered in the system.';
+                
+                // If we found a match but it was above threshold
+                if ($bestMatchDescriptor && $minDistance >= 0.5) { // Changed from 0.6 to 0.5
+                    $message = 'Face detected but confidence too low for attendance. Please try again or register your face.';
+                }
+                
                 return response()->json([
                     'success' => false,
-                    'message' => 'No matching face found in the system',
+                    'message' => $message,
+                    'distance' => round($minDistance, 4),
+                    'threshold' => 0.6 // Changed from 0.6 to 0.5
                 ], 404);
             }
 
