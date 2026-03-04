@@ -48,6 +48,8 @@ Route::middleware(['api', 'auth:sanctum'])->group(function () {
     Route::get('/users', [UserController::class, 'index']);
     // Create new user (admin only)
     Route::post('/users', [UserController::class, 'store']);
+    // Update user (admin only)
+    Route::put('/users/{id}', [UserController::class, 'update']);
     
     // Get specific user
     Route::get('/users/{id}', [UserController::class, 'show']);

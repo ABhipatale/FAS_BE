@@ -345,4 +345,88 @@ class UserController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Update an existing user
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, $id)
+    {
+        try {
+            $authUser = $request->user();
+            
+            // Find user within the same company
+            $user = User::where('id', $id)
+                       ->where('company_id', $authUser->company_id)
+                       ->first();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found or unauthorized access'
+                ], 404);
+            }
+
+            // Validate the request data
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($id)],
+                'address' => 'nullable|string|max:255',
+                'phone' => 'nullable|string|max:20',
+                'sex' => 'nullable|string|in:Male,Female,Other',
+                'age' => 'nullable|integer|min:18|max:100',
+                'dob' => 'nullable|date',
+                'position' => 'nullable|string|max:100',
+                'shift_id' => 'nullable|exists:shifts,id',
+                'password' => 'nullable|string|min:6', // Optional - only update if provided
+                'role' => ['nullable', Rule::in(['admin', 'user', 'superadmin', 'employee'])],
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Update user fields
+            $user->name = $request->name;
+            $user->email = $request->email;
+            $user->address = $request->address ?? $user->address;
+            $user->phone = $request->phone ?? $user->phone;
+            $user->sex = $request->sex ?? $user->sex;
+            $user->age = $request->age ?? $user->age;
+            $user->dob = $request->dob ?? $user->dob;
+            $user->position = $request->position ?? $user->position;
+            $user->shift_id = $request->shift_id ?? $user->shift_id;
+            $user->role = $request->role ?? $user->role;
+            
+            // Only update password if provided
+            if ($request->filled('password')) {
+                $user->password = $request->password; // Will be hashed by User model
+            }
+            
+            $user->save();
+
+            // Load the shift relationship
+            $user->load('shift');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Employee updated successfully',
+                'data' => $user
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update employee',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
