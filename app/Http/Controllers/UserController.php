@@ -161,9 +161,13 @@ class UserController extends Controller
             // Check database connectivity
             \DB::connection()->getPdo();
             
-            // Filter users by company
+            // Filter users by company.
+            // withCount gives face_descriptors_count, which is the real source of
+            // truth for face registration - the users.face_descriptor column is
+            // never written to by the registration flow.
             $users = User::where('company_id', $user->company_id)
                         ->with('shift')
+                        ->withCount('faceDescriptors')
                         ->get();
             
             return response()->json([
@@ -199,6 +203,7 @@ class UserController extends Controller
             $user = User::where('id', $id)
                        ->where('company_id', $authUser->company_id)
                        ->with('shift')
+                       ->withCount('faceDescriptors')
                        ->first();
             
             if (!$user) {
