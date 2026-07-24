@@ -546,17 +546,29 @@ class AttendanceController extends Controller
             }
             
             // Get filter parameters
-            $filter = $request->query('filter', 'today'); // today, yesterday, custom
+            $filter = $request->query('filter', 'today'); // today, yesterday, week, month, custom
             $startDate = $request->query('start_date');
             $endDate = $request->query('end_date');
-            
+
             $query = Attendance::with('user', 'user.shift');
-            
-            // Apply date filters
+
+            // Apply date filters. week/month are what the dashboard dropdown
+            // sends - without them the query used to fall through and return
+            // every record ever recorded.
             if ($filter === 'today') {
                 $query->whereDate('date', Carbon::today());
             } elseif ($filter === 'yesterday') {
                 $query->whereDate('date', Carbon::yesterday());
+            } elseif ($filter === 'week') {
+                $query->whereBetween('date', [
+                    Carbon::today()->subDays(6)->toDateString(),
+                    Carbon::today()->toDateString(),
+                ]);
+            } elseif ($filter === 'month') {
+                $query->whereBetween('date', [
+                    Carbon::today()->startOfMonth()->toDateString(),
+                    Carbon::today()->endOfMonth()->toDateString(),
+                ]);
             } elseif ($filter === 'custom' && $startDate && $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
             }
