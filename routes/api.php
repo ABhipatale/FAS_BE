@@ -74,4 +74,5 @@ Route::middleware(['api', 'auth:sanctum'])->group(function () {
     Route::put('/company/update', [CompanyController::class, 'updateCompany']);
     Route::get('/companies', [CompanyController::class, 'index']); // Superadmin only
     Route::get('/companies/{id}', [CompanyController::class, 'show']); // Superadmin only
+    Route::put('/companies/{id}', [CompanyController::class, 'update']); // Superadmin only - edit + activate/deactivate
 });

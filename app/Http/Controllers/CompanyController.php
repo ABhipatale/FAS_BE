@@ -212,7 +212,7 @@ class CompanyController extends Controller
                 ], 403);
             }
 
-            $companies = Company::all();
+            $companies = Company::withCount('users')->latest()->get();
 
             return response()->json([
                 'success' => true,
@@ -222,6 +222,80 @@ class CompanyController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to retrieve companies',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Update any company by ID (for superadmin only).
+     *
+     * Unlike updateCompany() this is not scoped to the caller's own company,
+     * so it powers the Company Management screen. Also used to activate /
+     * deactivate a company by sending just the `status` field.
+     */
+    public function update(Request $request, $id)
+    {
+        try {
+            $user = $request->user();
+
+            // Only superadmin can update arbitrary companies
+            if ($user->role !== 'superadmin') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized to update companies'
+                ], 403);
+            }
+
+            $company = Company::find($id);
+
+            if (!$company) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Company not found'
+                ], 404);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'name' => 'sometimes|required|string|max:255',
+                'email' => [
+                    'sometimes', 'required', 'email', 'max:255',
+                    Rule::unique('companies', 'email')->ignore($company->id),
+                ],
+                'address' => 'nullable|string|max:500',
+                'phone' => 'nullable|string|max:20',
+                'logo' => 'nullable|string',
+                'status' => 'sometimes|required|in:active,inactive',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Don't let a superadmin deactivate the company they belong to
+            if ($request->input('status') === 'inactive'
+                && (int) $company->id === (int) $user->company_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You cannot deactivate the company you belong to'
+                ], 422);
+            }
+
+            $company->update($request->only(['name', 'email', 'address', 'phone', 'logo', 'status']));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Company updated successfully',
+                'data' => $company->loadCount('users')
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update company',
                 'error' => $e->getMessage()
             ], 500);
         }
