@@ -7,6 +7,7 @@ use App\Http\Controllers\FaceDescriptorController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\SuperAdminController;
 
 /*
 |--------------------------------------------------------------------------
@@ -73,6 +74,10 @@ Route::middleware(['api', 'auth:sanctum'])->group(function () {
     Route::get('/company/details', [CompanyController::class, 'getCompanyDetails']);
     Route::put('/company/update', [CompanyController::class, 'updateCompany']);
     Route::get('/companies', [CompanyController::class, 'index']); // Superadmin only
+
+    // Cross-company system overview (superadmin dashboard)
+    Route::get('/superadmin/overview', [SuperAdminController::class, 'overview']);
+
     Route::get('/companies/{id}', [CompanyController::class, 'show']); // Superadmin only
     Route::put('/companies/{id}', [CompanyController::class, 'update']); // Superadmin only - edit + activate/deactivate
 });
