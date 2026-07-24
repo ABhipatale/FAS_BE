@@ -18,8 +18,9 @@ class CompanyController extends Controller
     {
         try {
             // Log the incoming request for debugging
+            // company_logo is a base64 data URI - keep it out of the log file
             \Log::info('Company registration attempt', [
-                'request_data' => $request->all(),
+                'request_data' => $request->except(['company_logo', 'admin_password']),
                 'validation_errors' => []
             ]);
             
@@ -29,6 +30,8 @@ class CompanyController extends Controller
                 'company_email' => 'required|email|unique:companies,email|max:255',
                 'company_address' => 'nullable|string|max:500',
                 'company_phone' => 'nullable|string|max:20',
+                // base64 data URI produced by the client-side resizer
+                'company_logo' => 'nullable|string|max:2000000',
                 'admin_name' => 'required|string|max:255',
                 'admin_email' => 'required|email|unique:users,email|max:255',
                 'admin_password' => 'required|string|min:6',
@@ -58,6 +61,7 @@ class CompanyController extends Controller
                 'email' => $request->company_email,
                 'address' => $request->company_address,
                 'phone' => $request->company_phone,
+                'logo' => $request->company_logo,
                 'status' => 'active'
             ]);
 
@@ -167,7 +171,7 @@ class CompanyController extends Controller
                 'email' => 'sometimes|required|email|max:255|unique:companies,email,' . $user->company->id,
                 'address' => 'nullable|string|max:500',
                 'phone' => 'nullable|string|max:20',
-                'logo' => 'nullable|string',
+                'logo' => 'nullable|string|max:2000000',
                 'status' => 'sometimes|required|in:active,inactive',
             ]);
 
@@ -264,7 +268,7 @@ class CompanyController extends Controller
                 ],
                 'address' => 'nullable|string|max:500',
                 'phone' => 'nullable|string|max:20',
-                'logo' => 'nullable|string',
+                'logo' => 'nullable|string|max:2000000',
                 'status' => 'sometimes|required|in:active,inactive',
             ]);
 
