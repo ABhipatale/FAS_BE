@@ -79,7 +79,16 @@ class User extends Authenticatable
     {
         return $this->role === 'employee' || $this->role === '3';
     }
-    
+
+    /**
+     * Kiosk-only account: the app shows it the face attendance screen and
+     * nothing else - no dashboard, no navigation, no other routes.
+     */
+    public function isAttendanceApp(): bool
+    {
+        return $this->role === 'attendanceapp';
+    }
+
     // Relationship with Face Descriptors
     public function faceDescriptors()
     {

@@ -51,6 +51,8 @@ Route::middleware(['api', 'auth:sanctum'])->group(function () {
     Route::post('/users', [UserController::class, 'store']);
     // Update user (admin only)
     Route::put('/users/{id}', [UserController::class, 'update']);
+    // Delete user (admin only)
+    Route::delete('/users/{id}', [UserController::class, 'destroy']);
     
     // Get specific user
     Route::get('/users/{id}', [UserController::class, 'show']);

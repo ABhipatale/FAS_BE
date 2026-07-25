@@ -24,7 +24,7 @@ class UserController extends Controller
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users,email|max:255',
-                'role' => ['required', Rule::in(['admin', 'user', 'superadmin'])],
+                'role' => ['required', Rule::in(['admin', 'user', 'superadmin', 'employee', 'attendanceapp'])],
                 'password' => 'required|string|min:6',
             ]);
 
@@ -92,7 +92,9 @@ class UserController extends Controller
                 'position' => 'nullable|string|max:100',
                 'shift_id' => 'nullable|exists:shifts,id',
                 'password' => 'required|string|min:6',
-                'role' => ['nullable', Rule::in(['admin', 'user', 'superadmin', 'employee'])],
+                // attendanceapp = kiosk-only account: the app exposes just the face
+                // attendance screen to it, no dashboard and no other routes.
+                'role' => ['nullable', Rule::in(['admin', 'user', 'superadmin', 'employee', 'attendanceapp'])],
             ]);
 
             if ($validator->fails()) {
@@ -398,7 +400,9 @@ class UserController extends Controller
                 'position' => 'nullable|string|max:100',
                 'shift_id' => 'nullable|exists:shifts,id',
                 'password' => 'nullable|string|min:6', // Optional - only update if provided
-                'role' => ['nullable', Rule::in(['admin', 'user', 'superadmin', 'employee'])],
+                // attendanceapp = kiosk-only account: the app exposes just the face
+                // attendance screen to it, no dashboard and no other routes.
+                'role' => ['nullable', Rule::in(['admin', 'user', 'superadmin', 'employee', 'attendanceapp'])],
             ]);
 
             if ($validator->fails()) {
@@ -447,6 +451,67 @@ class UserController extends Controller
                 'success' => false,
                 'message' => 'Failed to update employee',
                 'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete a user (admin only).
+     *
+     * The frontend has always called DELETE /users/{id}, but no such route
+     * existed - deletions silently failed. Attendance and face descriptors are
+     * removed by the foreign keys' cascade.
+     */
+    public function destroy(Request $request, $id)
+    {
+        try {
+            $authUser = $request->user();
+
+            if (!$authUser || !in_array($authUser->role, ['admin', 'superadmin'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized - administrators only',
+                ], 403);
+            }
+
+            if ((int) $id === (int) $authUser->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You cannot delete your own account',
+                ], 422);
+            }
+
+            $user = User::where('id', $id)
+                        ->where('company_id', $authUser->company_id)
+                        ->first();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found or unauthorized access',
+                ], 404);
+            }
+
+            // Only a superadmin may remove another administrator
+            if (in_array($user->role, ['admin', 'superadmin']) && $authUser->role !== 'superadmin') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only a super administrator can delete an administrator account',
+                ], 403);
+            }
+
+            $name = $user->name;
+            $user->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => "{$name} was deleted",
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete user',
+                'error' => $e->getMessage(),
             ], 500);
         }
     }

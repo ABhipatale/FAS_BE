@@ -19,8 +19,12 @@ use Illuminate\Support\Facades\DB;
  */
 class SuperAdminController extends Controller
 {
-    /** Roles that are staff accounts rather than attendance-tracked employees */
-    private const STAFF_ROLES = ['admin', 'superadmin'];
+    /**
+     * Roles that are not attendance-tracked people: administrators, plus
+     * attendanceapp kiosk device accounts. Counting a kiosk as an employee
+     * would inflate headcount and dilute every attendance percentage.
+     */
+    private const STAFF_ROLES = ['admin', 'superadmin', 'attendanceapp'];
 
     public function overview(Request $request)
     {

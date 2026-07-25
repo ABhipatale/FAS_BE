@@ -24,6 +24,19 @@ class AttendanceController extends Controller
     public function markAttendance(Request $request)
     {
         try {
+            // Punching is a device action, not a self-service one. Only the
+            // attendance kiosk (attendanceapp) and admins may submit a face;
+            // an employee must never be able to mark attendance from their own
+            // login, which is exactly what the UI route block mirrors.
+            $authUser = $request->user();
+
+            if (!$authUser || !in_array($authUser->role, ['attendanceapp', 'admin', 'superadmin'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This account cannot mark attendance. Please use the attendance kiosk.',
+                ], 403);
+            }
+
             // Validate the request data
             $validator = Validator::make($request->all(), [
                 'face_descriptor' => 'required|array',
