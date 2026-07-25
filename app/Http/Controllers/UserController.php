@@ -198,13 +198,19 @@ class UserController extends Controller
     {
         try {
             $authUser = request()->user();
-            
-            // Find user within the same company
-            $user = User::where('id', $id)
-                       ->where('company_id', $authUser->company_id)
+
+            // Find user within the same company. A user can always read their
+            // own record - company scoping alone locks out legacy accounts with
+            // no company_id, which breaks the profile page for them.
+            $query = User::where('id', $id)
                        ->with('shift')
-                       ->withCount('faceDescriptors')
-                       ->first();
+                       ->withCount('faceDescriptors');
+
+            if ((int) $id !== (int) $authUser->id) {
+                $query->where('company_id', $authUser->company_id);
+            }
+
+            $user = $query->first();
             
             if (!$user) {
                 return response()->json([
@@ -362,12 +368,17 @@ class UserController extends Controller
     {
         try {
             $authUser = $request->user();
-            
-            // Find user within the same company
-            $user = User::where('id', $id)
-                       ->where('company_id', $authUser->company_id)
-                       ->first();
-            
+
+            // Same rule as show(): editing yourself is always allowed, editing
+            // anyone else stays inside your own company.
+            $query = User::where('id', $id);
+
+            if ((int) $id !== (int) $authUser->id) {
+                $query->where('company_id', $authUser->company_id);
+            }
+
+            $user = $query->first();
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -408,7 +419,12 @@ class UserController extends Controller
             $user->dob = $request->dob ?? $user->dob;
             $user->position = $request->position ?? $user->position;
             $user->shift_id = $request->shift_id ?? $user->shift_id;
-            $user->role = $request->role ?? $user->role;
+
+            // Only admins may change a role. Without this any signed-in user
+            // could PUT their own record with role=admin and escalate.
+            if ($request->filled('role') && in_array($authUser->role, ['admin', 'superadmin'])) {
+                $user->role = $request->role;
+            }
             
             // Only update password if provided
             if ($request->filled('password')) {
