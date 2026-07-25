@@ -1,0 +1,206 @@
+================================================================================
+RENDER DEPLOYMENT GUIDE
+Face Attendance System  --  Laravel 12 API + React (Vite) SPA
+Generated: 2026-07-25
+================================================================================
+
+Detected stack (verified against the codebase, not assumed):
+
+  Frontend build tool : VITE  (vite 7.2.4)
+                        -> confirmed by frontend/vite.config.js and the
+                           "build": "vite build" script in package.json.
+                        -> This is NOT Create React App, so the publish
+                           directory is "dist", NOT "build".
+  Backend             : Laravel 12 (PHP ^8.2)
+  Build status        : `npm run build` verified passing, exit code 0.
+
+
+================================================================================
+PART 1 - FRONTEND (Render "Static Site")
+================================================================================
+
+Root Directory      :  frontend
+                       (set this if the repo contains both apps; otherwise
+                        Render will run the build at the repo root and fail)
+
+1. BUILD COMMAND
+--------------------------------------------------------------------------------
+       npm install && npm run build
+
+   (`npm run build` alone is enough only if Render has already installed
+    dependencies. Including `npm install` is the safe form.)
+
+
+2. PUBLISH DIRECTORY
+--------------------------------------------------------------------------------
+       dist
+
+   Vite outputs to `dist`. If you enter `build` here you will get a
+   "Publish directory does not exist" error at deploy time.
+
+
+3. CATCH-ALL REWRITE RULE  (REQUIRED - do not skip)
+--------------------------------------------------------------------------------
+   React Router handles routes like /company-register and /dashboard on the
+   client. Render's static host knows nothing about them, so a hard refresh
+   or a direct link to any route other than "/" returns 404 until you add:
+
+       Dashboard -> your Static Site -> Redirects/Rewrites -> Add Rule
+
+       Source       :  /*
+       Destination  :  /index.html
+       Action       :  Rewrite        <-- must be Rewrite, NOT Redirect
+
+   Choosing "Redirect" instead of "Rewrite" will change the URL in the
+   address bar and break deep links.
+
+
+4. FRONTEND ENVIRONMENT VARIABLE
+--------------------------------------------------------------------------------
+   Add this in the Static Site's Environment section BEFORE the first build:
+
+       VITE_API_URL = https://<your-backend-service>.onrender.com/api
+
+   IMPORTANT - Vite inlines env vars at BUILD time, not at runtime. Changing
+   this value later has no effect until you trigger a new deploy/rebuild.
+
+   Notes:
+     - Must start with the VITE_ prefix or Vite will not expose it.
+     - Include the trailing /api - the app appends endpoint paths like
+       "/companies/register" directly to this value.
+     - No trailing slash after /api.
+
+   src/config/api.js now reads:
+       BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:8009/api'
+   so local `npm run dev` keeps working with no .env file present.
+
+
+================================================================================
+PART 2 - BACKEND (Render "Web Service", Docker)
+================================================================================
+
+Root Directory      :  backend
+Runtime             :  Docker
+Dockerfile Path     :  ./Dockerfile
+Health Check Path   :  /up        (Laravel's built-in health route, already
+                                   registered in bootstrap/app.php)
+
+The Dockerfile uses richarvey/nginx-php-fpm with RUN_SCRIPTS=1, so
+scripts/00-laravel-deploy.sh runs automatically on every container start.
+That script installs composer deps, caches config + routes, and runs
+`php artisan migrate --force`.
+
+
+5. ENVIRONMENT VARIABLES TO ADD MANUALLY IN THE RENDER DASHBOARD
+--------------------------------------------------------------------------------
+   Dashboard -> your Web Service -> Environment -> Add Environment Variable
+
+   REQUIRED
+   ....................................................................
+   APP_KEY          base64:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+                    Generate locally with:
+                        php artisan key:generate --show
+                    Copy the FULL output including the "base64:" prefix.
+                    Without this every encrypted value and session breaks
+                    with "No application encryption key has been specified."
+
+   APP_ENV          production
+                    Also baked into the Dockerfile, but set it explicitly
+                    here so it is visible and overridable.
+                    This is what activates URL::forceScheme('https') in
+                    app/Providers/AppServiceProvider.php.
+
+   APP_URL          https://<your-backend-service>.onrender.com
+                    No trailing slash.
+
+   DB_CONNECTION    pgsql
+
+   DATABASE_URL     postgresql://USER:PASSWORD@HOST/DB?sslmode=require
+                    Your Neon.tech connection string.
+                    Neon requires sslmode=require - keep that parameter.
+
+   FRONTEND_URL     https://<your-frontend-site>.onrender.com
+                    Read by config/cors.php. Comma-separate multiple
+                    origins, e.g.:
+                        https://app.example.co.in,https://www.example.co.in
+                    Each entry is scheme + host only:
+                        correct -> https://app.example.co.in
+                        wrong   -> https://app.example.co.in/
+                    If this is missing or wrong, every browser request fails
+                    with "blocked by CORS policy" even though the API works
+                    fine in Postman.
+
+   RECOMMENDED
+   ....................................................................
+   APP_DEBUG        false
+   LOG_CHANNEL      stderr        (Render captures stdout/stderr as logs)
+   APP_TIMEZONE     Asia/Kolkata  (your .env uses DB_TIMEZONE=+05:30)
+
+
+   *** SECURITY - DO NOT COMMIT YOUR NEON DATABASE URL ***
+   ....................................................................
+   DATABASE_URL contains your Postgres username AND password in plaintext.
+   Enter it ONLY in the Render dashboard. Never put it in:
+       - .env.example
+       - the Dockerfile (ENV lines are baked into the image and readable
+         by anyone who pulls it)
+       - render.yaml
+       - any file tracked by git
+
+   backend/.gitignore already ignores .env, .env.backup and .env.production.
+   Keep it that way. If a credential is ever committed, rotate it in the
+   Neon console - deleting the commit is not sufficient, the value stays
+   recoverable in git history and in any clone or fork.
+
+
+================================================================================
+PART 3 - MYSQL -> POSTGRES NOTES
+================================================================================
+
+Your local dev uses MySQL/MariaDB (port 3308); production will use Neon
+Postgres. The 16 migrations were scanned for portability:
+
+  OK  - No raw DB::statement() calls
+  OK  - No AUTO_INCREMENT / ENGINE= / MySQL-only SQL
+  OK  - ->enum('status', [...]) appears in create_shifts_table and
+        create_companies_table. Laravel maps this to varchar + a CHECK
+        constraint on Postgres, so it migrates cleanly.
+
+  WATCH OUT - Postgres is case-sensitive about identifiers and stricter
+        about GROUP BY than MySQL. If any controller does a groupBy() while
+        selecting non-aggregated columns, MySQL tolerates it and Postgres
+        raises "column must appear in the GROUP BY clause". Exercise the
+        dashboard/report endpoints after the first deploy.
+
+  Your existing local data does NOT transfer automatically. `migrate --force`
+  only creates the schema. To move current records, dump from MySQL and
+  import into Neon separately.
+
+
+================================================================================
+PART 4 - DEPLOY ORDER
+================================================================================
+
+  1. Deploy the BACKEND first - you need its final .onrender.com URL.
+  2. Copy that URL into the frontend's VITE_API_URL, then deploy the SPA.
+  3. Copy the SPA's URL into the backend's FRONTEND_URL, then trigger a
+     manual redeploy of the backend so CORS picks it up.
+
+  Step 3 is easy to forget. Until it is done the frontend loads but every
+  API call is blocked by CORS.
+
+
+================================================================================
+PART 5 - POST-DEPLOY CHECKS
+================================================================================
+
+  [ ] https://<backend>/up                     returns 200
+  [ ] Deploy logs show "Running migrations..." with no failures
+  [ ] Browser DevTools -> Network -> any /api call shows response header
+      Access-Control-Allow-Origin matching your exact frontend origin
+      (it should NOT be "*" any more)
+  [ ] Hard-refresh on a deep route such as /company-register returns the app,
+      not a 404  (verifies the catch-all rewrite)
+  [ ] Login works and the token persists across a page reload
+
+================================================================================
