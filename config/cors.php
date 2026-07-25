@@ -30,7 +30,12 @@ return [
         explode(',', (string) env('FRONTEND_URL', 'http://localhost:5173,http://localhost:3000'))
     ))),
 
-    'allowed_origins_patterns' => [],
+    // Any Render-hosted frontend (fas-fe-1.onrender.com, preview deploys, ...)
+    // is allowed without having to redeploy the API for each new URL. Set
+    // FRONTEND_URL as well to lock this down to your exact domain later.
+    'allowed_origins_patterns' => [
+        '#^https://[a-z0-9-]+\.onrender\.com$#i',
+    ],
 
     'allowed_headers' => ['*'],
 
