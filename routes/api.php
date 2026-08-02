@@ -8,6 +8,7 @@ use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\SuperAdminController;
+use App\Http\Controllers\PasswordResetController;
 
 /*
 |--------------------------------------------------------------------------
@@ -30,6 +31,13 @@ Route::middleware('api')->group(function () {
     
     // Company registration endpoint
     Route::post('/companies/register', [CompanyController::class, 'register']);
+
+    // Forgot / reset password. Throttled because both are unauthenticated and
+    // one of them sends email.
+    Route::post('/password/forgot', [PasswordResetController::class, 'sendResetLink'])
+        ->middleware('throttle:6,1');
+    Route::post('/password/reset', [PasswordResetController::class, 'reset'])
+        ->middleware('throttle:6,1');
     
     // Test endpoint
     Route::get('/test', function () {
